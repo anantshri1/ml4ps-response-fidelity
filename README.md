@@ -1,7 +1,5 @@
 # Derivative-Informed Fourier Neural Operators for learning Quantum Response Functions
-A systematic study to test whether a Fourier Neural Operator (FNO) trained only on forward evolution of a quantum wavefunction `(ψ₀, V) → ψ_T` learns the correct response `∂ψ_T/∂V `as a byproduct.
 
-> We study the **1D Time-Dependent Schrödinger Equation** describing a particle on a ring here. We start from the time-independent evolution of the particle on a ring:  $-\frac{\hbar}{2m}\frac{\partial^2\psi}{\partial x^2} = E\psi(x)$ subject to periodic boundary conditions. Periodic boundary conditions allow us to define a new variable $\varphi = \frac{x}{R}$ and restate the TISE in polar coordinates $-\frac{\hbar}{2mR^2}\frac{\partial^2\psi}{\partial\varphi^2} = E\psi$, where $E = \frac{L_z^2}{2I}$ in terms of the angular momentum $L_z$ and the moment of inertia $I$. The equation takes the form $\psi"(\varphi) + n^2\psi(\varphi) = 0$, where $n^2 = \fra<explanation>
 ## Purpose and entry points
 This is a Python/JAX research pipeline for learning 1D periodic time-dependent Schrödinger evolution, then measuring whether a Fourier Neural Operator (FNO) learns the potential-to-wavefunction response Jacobian as a byproduct. Primary drivers are data generation, FNO/DINO training, response evaluation, and experiment sweeps: `scripts/gen_data.py`, `scripts/train.py`, `scripts/train_dino.py`, `scripts/compute_response.py`, and `scripts/eval_ood.py`.
 
