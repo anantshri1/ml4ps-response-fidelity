@@ -43,6 +43,82 @@ Scripts implement capacity, seed, training-size, perturbation-theory, alignment,
 
 ## Runtime and infrastructure
 Runtime is Python with JAX/XLA, Equinox model pytrees/checkpoint serialization, Optax optimization, NumPy artifacts, MLflow tracking, and Matplotlib analysis. Local experiment state includes `mlflow.db`, `logs/`, `checkpoints/`, and `results/`; no service-oriented or web runtime is indicated.
+
+## Pipeline overview
+
+```mermaid
+flowchart TD
+
+subgraph group_physics["Reference physics &amp; data"]
+  node_gen_data["Data generation<br/>script<br/>[gen_data.py]"]
+  node_data_gen["Sampling &amp; dataset builder<br/>data pipeline<br/>[data_gen.py]"]
+  node_solver["Split-operator solver<br/>JAX physics<br/>[solver.py]"]
+  node_defaults["Default parameters<br/>configuration<br/>[default.py]"]
+  node_dataset[("Canonical datasets<br/>NumPy data")]
+end
+
+subgraph group_learning["Surrogate learning"]
+  node_fno["FNO surrogate<br/>Equinox/JAX model<br/>[fno.py]"]
+  node_train["FNO training<br/>script<br/>[train.py]"]
+  node_precompute_dino["DINO target precompute<br/>script<br/>[precompute_dino.py]"]
+  node_dino_cache[("DINO JVP cache<br/>NumPy artifact")]
+  node_train_dino["DINO training<br/>script<br/>[train_dino.py]"]
+  node_checkpoints[("Model checkpoints<br/>artifact store")]
+end
+
+subgraph group_response["Response analysis"]
+  node_responses["Jacobian transforms &amp; metrics<br/>analysis library<br/>[responses.py]"]
+  node_compute_response["Response evaluator<br/>script"]
+  node_response_cache[("Response caches<br/>NumPy artifacts<br/>[Jtrue_kq_200.npy]")]
+end
+
+subgraph group_experiments["Experiment orchestration"]
+  node_sweep_retrain["Capacity &amp; data sweeps<br/>script<br/>[sweep_retrain.py]"]
+  node_sweep_response["Response capacity sweep<br/>script"]
+  node_ood_build["OOD truth builder<br/>script<br/>[ood_build_jtrue.py]"]
+  node_ood_sweep["OOD response sweep<br/>script<br/>[ood_sweep.py]"]
+  node_ood_forward["OOD forward evaluation<br/>script<br/>[ood_forward.py]"]
+  node_ood_results[("OOD results<br/>artifact store")]
+end
+
+node_defaults -->|"parameters"| node_gen_data
+node_gen_data -->|"runs"| node_data_gen
+node_data_gen -->|"evolves samples"| node_solver
+node_data_gen -->|"writes"| node_dataset
+node_dataset -->|"training data"| node_train
+node_fno -->|"optimized by"| node_train
+node_train -->|"saves FNO weights"| node_checkpoints
+node_dataset -->|"states and potentials"| node_precompute_dino
+node_solver -->|"trusted JVPs"| node_precompute_dino
+node_precompute_dino -->|"writes"| node_dino_cache
+node_dataset -->|"forward examples"| node_train_dino
+node_dino_cache -->|"directional targets"| node_train_dino
+node_fno -->|"model architecture"| node_train_dino
+node_train_dino -->|"saves float64 DINO weights"| node_checkpoints
+node_solver -->|"true Jacobian"| node_compute_response
+node_checkpoints -->|"loaded surrogate"| node_compute_response
+node_responses -->|"Fourier transforms and metrics"| node_compute_response
+node_compute_response -->|"writes evaluated Jacobians"| node_response_cache
+node_sweep_retrain -->|"launches runs"| node_train
+node_sweep_response -->|"compares capacities"| node_compute_response
+node_ood_build -->|"computes OOD truth"| node_solver
+node_ood_build -->|"caches conditions"| node_ood_results
+node_ood_sweep -->|"evaluates OOD responses"| node_compute_response
+node_ood_sweep -->|"writes study results"| node_ood_results
+node_ood_forward -->|"loads models"| node_checkpoints
+node_ood_forward -->|"writes forward metrics"| node_ood_results
+
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+
+class node_gen_data,node_data_gen,node_solver,node_defaults,node_dataset toneBlue
+class node_fno,node_train,node_precompute_dino,node_dino_cache,node_train_dino,node_checkpoints toneAmber
+class node_responses,node_compute_response,node_response_cache toneMint
+class node_sweep_retrain,node_sweep_response,node_ood_build,node_ood_sweep,node_ood_forward,node_ood_results toneRose
+```
+
 </explanation>
 
 ---
