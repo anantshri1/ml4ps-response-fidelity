@@ -1,147 +1,298 @@
-CANONICAL NUMBERS — spectral-quantum-response
-Ground truth. Any figure elsewhere in the narrative that disagrees is superseded by this file.
-Source: README @ afa2c6d.  Set: 2026-08-14.
+CANONICAL NUMBERS — ml4ps-response-fidelity
+Source: @28f9878.  Set: 2026-09-18.
  
 ================================================================
-0. PRECISION REGIMES  (read this first — numbers are NOT comparable across regimes)
+0. PRECISION REGIMES
 ================================================================
-Two regimes exist. Mixing them is the #1 source of apparent "instability":
- 
-  f32 : original forward training only.
-        Canonical forward checkpoint = checkpoints/fno_N2000_seed0_final.eqx.
-  f64 : EVERYTHING response-related — J_true, J_fno, DINO, capacity, Born, OOD.
-        x64 is enabled globally (the response JVP machinery requires it), which
-        promotes the FNO forward pass too. This is deliberate, not a leak.
- 
-RULE: every response number is f64. The f32-era response figures
-      (0.386, 0.511, 48.9% recovered) are HISTORICAL and SUPERSEDED — they
-      survive in the narrative only to tell the precision-sensitivity story
-      (a 0.002 forward shift moved response by 0.068).
- 
+Two precision regimes are used throughout. Numbers are not comparable across regimes.
+
+  f32 : forward training only.
+        Canonical forward checkpoint: checkpoints/fno_N2000_seed0_final.eqx
+  f64 : all response-related quantities — J_true, J_fno, DINO, capacity, Born, OOD.
+        x64 enabled globally (required by the response JVP machinery), which
+        promotes the FNO forward pass to f64 as well. This is intentional.
+
+All response numbers below are f64. The f32-era figures (0.386, 0.511, 48.9%
+recovered) are superseded; see §17.
+
 ================================================================
 1. FORWARD ACCURACY
 ================================================================
-f32 canonical checkpoint (M16, seed0)      forward rel-L2 = 0.0169   ["good surrogate"]
+f32 canonical checkpoint (M16, seed0)      forward rel-L2 = 0.0169
   norm-violation (byproduct, never in loss)              = 0.0057
 f64 forward-only floor (M16, lambda=0)     forward rel-L2 ~ 0.0187   (seeds 0-2; seed3 = 0.0200)
- 
+
 ================================================================
-2. RESPONSE — FORWARD-ONLY (lambda=0), f64, 4-SEED GRID   [CANONICAL]
+2. RESPONSE — FORWARD-ONLY (lambda=0), f64, 4-SEED   [CANONICAL]
 ================================================================
 M16 lambda=0   0.573 +/- 0.029   range [0.531, 0.596]   (seed0 = 0.5787)
 M12 lambda=0   0.257 +/- 0.026   range [0.241, 0.295]
-Capacity bias : M16 ~ 2.2x M12, ranges DISJOINT by 0.236  (~8 sigma)
- 
-  [DECISION #1 — pick one headline for the forward-only floor and use it everywhere:
-     0.573  = 4-seed mean (most recent, tightest provenance)  <-- recommended
-     0.587  = 3-seed mean (this is the number the Born tie was computed against)
-     0.5787 = seed0 single (use ONLY for single-sample prose)
-   In prose "~0.58" covers all three; tables use the tagged precise value.]
- 
+Capacity bias : M16 ~ 2.2x M12, ranges disjoint by 0.236 (~8 sigma)
+
+Three headline values appear in the narrative, all consistent:
+  0.573  = 4-seed mean [tables]
+  0.587  = 3-seed mean [data-efficiency sweep, §12 — apples-to-apples with lam=0.1 vsN]
+  0.5787 = seed0 single [single-sample comparisons]
+In prose "~0.58" covers all three; tables cite the tagged precise value.
+
 ================================================================
-3. RESPONSE — SIGN FLIP (lambda=10), f64, 4-SEED GRID   [CANONICAL]
+3. RESPONSE — SIGN FLIP (lambda=10) AND CLIP VS RETRAIN, f64
 ================================================================
+
+--- Sign flip, 4-seed ---
 M12 lambda=10  0.0673 +/- 0.0017  range [0.0657, 0.0694]
 M16 lambda=10  0.0571 +/- 0.0017  range [0.0548, 0.0585]
-Flip : M16 < M12, gap 0.0072 (~4 sigma), EVERY individual seed flips.
-Variance collapse lambda=0 -> lambda=10 : std 0.026-0.029 -> 0.0017  (~16x)
+Reversal : M16 < M12 under supervision; 4-seed ranges non-overlapping, gap 0.0072 (~4 sigma)
+Variance collapse lambda=0 -> lambda=10 : std 0.026-0.029 -> 0.0017 (~16x)
 
-## Clip vs retrain, f64, 3-seed (across-seed spread) — CONFIRMED, precision-robust
+--- Clip vs retrain, f64, 3-seed ---
 | M  | clip           | retrain        | gap    |
 |----|----------------|----------------|--------|
-| 2  | 1.087 ± 0.016  | 1.012 ± 0.018  | 0.075  |
-| 4  | 1.002 ± 0.012  | 0.551 ± 0.005  | 0.451  |
-| 8  | 0.718 ± 0.006  | 0.264 ± 0.008  | 0.454  |
-| 12 | 0.634 ± 0.007  | 0.262 ± 0.023  | 0.372  |
-| 16 | 0.587 ± 0.007  | 0.587 ± 0.007  | 0.000  |  <- identity check PASS (same model)
+| 2  | 1.087 +/- 0.016| 1.012 +/- 0.018| 0.075  |
+| 4  | 1.002 +/- 0.012| 0.551 +/- 0.005| 0.451  |
+| 8  | 0.718 +/- 0.006| 0.264 +/- 0.008| 0.454  |
+| 12 | 0.634 +/- 0.007| 0.262 +/- 0.023| 0.372  |
+| 16 | 0.587 +/- 0.007| 0.587 +/- 0.007| 0.000  |
 
-- Clip>retrain gap survives f64, same shape as Phase 5 f32, now 3-seed. Peaks
-  mid-range (M=4,8: gap ~0.45), closes at both ends (M=2 both starved ~1.0;
-  M=16 identity, gap exactly 0). Peak >> seed spread => CONFIRMED.
-  "Clipping overstates architectural damage; models ADAPT response repr to
-  smaller budgets — response info not rigidly bound to specific mode indices."
-- Retrain interior optimum CONFIRMED, full resolution: 1.01->0.55->0.264->0.262
-  ->0.587. Min at M in {8,12} (0.264/0.262, indistinguishable within spread),
-  M=16 WORSE by ~0.32. Full curve of "more modes hurt response (unsupervised)."
-- M=12 retrain spread (0.023) wider than neighbors — consistent M=12 seed noise
-  seen throughout. M8-vs-M12 is a genuine tie (overlapping bars).
-- Artifacts: results/response_clip_vs_retrain_f64.csv (6000 rows, tidy),
-  response_clip_vs_retrain_f64.png. Retrain checkpoints: dino_..._M{2,4,8}_lam0.0
-  (f64, 3 seeds). Phase 5 f32 artifacts untouched.
- 
+Clip > retrain gap confirmed f64, 3-seed. Peaks mid-range (M=4,8: gap ~0.45),
+closes at both ends (M=2 both near 1.0; M=16 identity by construction, gap = 0).
+Retrain interior optimum: 1.01 -> 0.55 -> 0.264 -> 0.262 -> 0.587. Minimum at
+M in {8,12} (indistinguishable within seed spread); M=16 worse by ~0.32.
+Models adapt response representation to smaller spectral budgets — response
+information is not rigidly bound to specific mode indices.
+Artifacts: results/response_clip_vs_retrain_f64.csv, response_clip_vs_retrain_f64.png
+
 ================================================================
-4. RESPONSE — DINO lambda SWEEP (M16), f64
+4. RESPONSE — DINO LAMBDA SWEEP (M16), f64   [CANONICAL]
 ================================================================
-lambda    forward    response   recovered
-0         0.0187     0.573      42.7%      [4-seed, canonical]
-0.1       0.0168     0.104      89.6%      [4-seed, canonical, backfilled]
-1         0.0144     0.073      92.8%      [PROVISIONAL — fewer seeds]
-10        0.0136     0.0571     94.3%      [4-seed, canonical]
-No Pareto tradeoff: forward IMPROVES monotonically with lambda, never degrades.
-"% recovered" := 1 - err  (linear rescale of relative Frobenius error;
-                            NOT variance-explained — label once as a definition.)
- [DECISION #2 — CLOSED for lambda=0.1: backfilled to 4 seeds (seed3 = raw 0.1058,
-  r 0.9935, cos 0.9938). N2000 cell now 0.1040 +/- 0.0019 (was 3-seed 0.1034).
-  lambda=1 REMAINS 3-seed/provisional — not load-bearing, out of scope. This was
-  seed parity, not new lambda points.]
+lambda    forward    response   recovered   seeds
+0         0.0187     0.573      42.7%       4-seed
+0.1       0.0168     0.1040     89.6%       4-seed (seed3 backfilled: raw 0.1058,
+                                             r 0.9935, cos 0.9938)
+1         0.0144     0.073      92.8%       3-seed [PROVISIONAL]
+10        0.0136     0.0571     94.3%       4-seed
+
+No Pareto tradeoff: forward accuracy IMPROVES monotonically with lambda.
+
+"% recovered" := 1 - response_error  (linear rescale of relative Frobenius error;
+                 NOT variance explained — definition holds throughout.)
+
 ================================================================
-5. BORN BASELINE, f64, 200 SAMPLES   [CANONICAL]   (all seed0, per-sample)
+5. BORN BASELINE, f64, 200 SAMPLES, seed0   [CANONICAL]
 ================================================================
 Born mean response error   0.651   (std 0.299, median 0.602, range [0.108, 1.534])
-FNO forward-only floor      ~0.58   (seed0 mean 0.5787; 4-seed canonical floor 0.573, see §2)
-Per-sample decorrelation    Pearson r = 0.107 (p=0.13), Spearman rho = 0.097 (p=0.17)
-Flatness (median split)     Born +0.463 (0.419 -> 0.882) ; FNO +0.016 (0.571 -> 0.586) -> 29x flatter
-On perturbative half        FNO (0.571) WORSE than Born (0.419)
-                            -> kills "FNO = perturbation theory + corrections"
+FNO forward-only floor     ~0.58   (seed0 mean 0.5787; 4-seed canonical 0.573, see §2)
+Per-sample decorrelation   Pearson r = 0.107 (p=0.13), Spearman rho = 0.097 (p=0.17)
+Flatness (median split)    Born +0.463 (0.419 -> 0.882) ; FNO +0.016 (0.571 -> 0.586)
+                           -> 29x flatter
+On perturbative half       FNO (0.571) worse than Born (0.419)
 
---- FINDING (paired test, seed0: born_errs_200 vs fno_errs_200_f64trained) ---
-NOT a statistical tie. FNO significantly better in MEAN, but the edge is TAIL-DRIVEN:
-  mean diff   0.0719   (paired t = 3.37, p ~ 0.001)   -> FNO better on average
-  median diff 0.0109   (Wilcoxon p = 3.26e-02)        -> near-zero typical gap
-  frac born>fno = 0.52                                -> FNO wins 52% ~ coin flip
-Bulk vs tail (this IS the perturbative-half line above): Born is competitive-to-
-  BETTER in the perturbative bulk (0.419 vs 0.571) and catastrophic in the tail
-  (up to 1.534); FNO's entire mean advantage is avoiding those tail blowups, not
-  being uniformly more accurate. Different failure modes (representational vs
-  perturbative), not a tie -- consistent with the r~0.1 decorrelation above.
-Paper sentence: "FNO's Jacobian beats first-order perturbation theory in mean
-  (Delta=0.072, p~0.001) but the advantage is tail-driven -- median Delta=0.011,
-  FNO wins 52% of samples (Wilcoxon p=0.03). On a typical potential the two are
-  statistically even; FNO's edge is avoiding Born's catastrophic failures."
+--- Paired test (born_errs_200 vs fno_errs_200_f64trained) ---
+mean diff   0.0719   (paired t = 3.37, p ~ 0.001)   -> FNO better on average
+median diff 0.0109   (Wilcoxon p = 3.26e-02)         -> near-zero typical gap
+frac born>fno = 0.52                                 -> FNO wins 52% ~ coin flip
 
-[RETRACTED 2026-08-17 (Decision #3): the earlier line "FNO ~0.58 -> STATISTICAL
- TIE with Born" is FALSE, superseded by the paired test above. "Tie" hands a
- reviewer a free "your own numbers contradict you." Logged, not reshaped.]
+Born is competitive-to-better in the perturbative bulk (0.419 vs 0.571) and
+catastrophic in the tail (up to 1.534). FNO's mean advantage is entirely
+tail-driven — avoiding Born's worst failures, not uniform accuracy. Failure
+modes are qualitatively different (representational vs perturbative), consistent
+with the r~0.1 per-sample decorrelation.
+
+FNO's Jacobian beats first-order perturbation theory in mean
+(Delta=0.072, p~0.001) but the advantage is tail-driven — median Delta=0.011,
+FNO wins 52% of samples (Wilcoxon p=0.03). On a typical potential the two are
+statistically even; FNO's edge is avoiding Born's catastrophic failures.
+            
+================================================================
+6. SPECTRAL BLOCK DECOMPOSITION, f64, seed0   [CANONICAL]
+================================================================
+Bands: S = |k| or |q| < 12 (in-band); X = [12,16); B = >= 16 (off-band)
+Rows = output |k| band, cols = input |q| band (% of total power)
+
+--- J_true power (seed-independent, 200 test samples) ---
+             S(<12)    X[12,16)   B(>=16)
+S(<12)       98.212     1.408      0.138
+X[12,16)      0.059     0.062      0.039
+B(>=16)       0.002     0.013      0.069
+
+|k|>=16 marginal (row B, any q) : 0.08%
+in-band |k|<12                  : 99.76%
+-> J_true is overwhelmingly concentrated in SS block; B row physically negligible.
+
+--- Jfno - Jtrue error decomposition (% of total error power) ---
+
+M12:
+         seed0                    seed1                    seed2
+         S      X      B          S      X      B          S      X      B
+S       10.418 18.055  2.641     6.851  11.702  1.810     9.536  19.460  2.619
+X        0.802  3.554  2.444     0.511   4.734  2.130     0.757   3.534  2.256
+B        0.535  1.490 60.060     0.363   1.386 70.513     0.545   1.407 59.886
+
+|k|>=16 marginal : 62.09%   72.26%   61.84%
+in-band |k|<12   : 31.11%   20.36%   31.61%
+-> M12 error is mixed: majority BB but substantial in-band component (~1/3 real).
+
+M16:
+         seed0                    seed1                    seed2
+         S      X      B          S      X      B          S      X      B
+S        1.678  0.748  0.569     1.524   0.705  0.618     1.516   0.850  0.622
+X        0.056  0.066  0.226     0.052   0.059  0.253     0.053   0.064  0.221
+B        0.129  0.185 96.343     0.115   0.180 96.495     0.112   0.165 96.398
+
+|k|>=16 marginal : 96.66%   96.79%   96.67%
+in-band |k|<12   :  3.00%    2.85%    2.99%
+-> M16 error is ~97% BB across all seeds — nearly entirely physically inert.
+
+M24:
+         seed0                    seed1                    seed2
+         S      X      B          S      X      B          S      X      B
+S        0.640  0.316  0.438     0.708   0.339  0.427     0.657   0.371  0.491
+X        0.017  0.022  0.046     0.019   0.021  0.044     0.020   0.023  0.051
+B        0.022  0.042 98.457     0.025   0.047 98.369     0.023   0.043 98.321
+
+|k|>=16 marginal : 98.52%   98.44%   98.39%
+in-band |k|<12   :  1.39%    1.47%    1.52%
+-> M24 error >98% BB; physically inert fraction grows monotonically with M.
+
+--- 3-seed summary ---
+M    BB marginal (mean +/- std)   in-band (mean +/- std)
+12   65.40% +/- 4.84%             27.69% +/- 5.10%
+16   96.71% +/- 0.06%              2.95% +/- 0.08%
+24   98.43% +/- 0.06%              1.46% +/- 0.06%
+
+Overstatement ratio iso/prior-JVP (from §7): 6.4x (M16), 10.9x (M24) —
+grows with capacity, not flat. Isotropic metric overstates capacity harm
+because it is dominated by the BB block, which carries 0.07% of J_true power.
 
 ================================================================
-6. MECHANISM — off-band hypothesis FALSIFIED, f64, 3-seed   [CANONICAL]
+7. PRIOR-JVP M-SWEEP, f64, 3-seed   [CANONICAL]
 ================================================================
-lambda=0 error split      in-band     off-band
-  M12                     0.133       0.032
-  M16                     0.305       0.041
-M16 excess over M12 : +0.172 in-band vs +0.009 off-band -> 19x -> liability ~95% IN-BAND
-Isolation : zero M16 modes 12-15 at inference -> in-band 0.300 -> 0.324 (flat/worse)
-            -> liability lives in SHARED low modes 0-11, not the extra modes themselves
-DINO repair : M16 in-band 0.305 -> 0.048 (6.4x) between lambda=0 and lambda=0.1
- 
+Metric: response error under perturbations drawn from the potential prior
+(v ~ prior distribution, NOT isotropic Gaussian).
+3-seed mean; cross-seed SE ~0.001-0.003; direction-MC uncertainty +/-0.0025.
+
+M    isotropic (retrain)    prior-JVP    gap
+2    1.01                   0.545        —
+4    0.55                   0.283        —
+8    0.26                   0.113        —
+12   0.26                   0.087        0.17
+14   0.40                   0.087        0.31
+16   0.59                   0.092        0.50
+20   0.83                   0.093        0.74
+24   0.92                   0.086        0.83
+
+Prior-JVP decreases M2->M12 (0.545->0.087), then plateaus at 0.089+/-0.003
+through M=24. Plateau onset at M=12 = the data's spectral support (98% of
+||J_true||^2 at |q|<12). Over the same M12->M24 range the isotropic metric
+rises 3.5x — an increase that lives entirely in the high-wavenumber sector
+carrying 0.07% of J_true power.
+
+A +0.005 bump at M16-20 (~2 SE, within direction-MC uncertainty) returns to
+baseline at M24; within noise, not a trend.
+
+Summary: along perturbations drawn from the potential prior, response error
+decreases with spectral capacity until the data's spectral support is resolved
+(M~12), then plateaus at 0.089+/-0.003 through M=24. The apparent isotropic
+capacity liability is spectrally displaced, not physical.
+
 ================================================================
-7. OOD — renorm arm, ls sweep 0.30 -> 0.05, f64, seeds {0,1,2} x lambda {0,0.1,10}   [CANONICAL]
+8. DINO UNDER PRIOR-JVP, f64, M16, 4-seed   [CANONICAL]
 ================================================================
-Forward-only forward rel-L2 : 0.016 -> 0.066  (rises 4x), stays <= 7% ("acceptable")
+Prior-JVP response error, cross-seed mean +/- SE (320 probe directions fixed, CRN):
+  lambda=0    0.0916 +/- 0.0004
+  lambda=0.1  0.0611 +/- 0.0013
+  lambda=10   0.0374 +/- 0.0008
+
+Real data-space improvement lambda=0 -> lambda=10: 0.092 -> 0.037 (~2.5x),
+decisive (~7 sigma paired). ~90% of the isotropic gain (0.573 -> 0.057) was
+high-high block cleanup (physically inert); ~10% is real physical improvement.
+
+Note on uncertainties: +/-0.0004 is cross-seed reproducibility with probe
+directions held FIXED. It is NOT direction-sampling uncertainty. Within-seed
+pop-std is +/-0.044; direction-MC uncertainty is +/-0.0025. These must be
+carried separately and never conflated with the +/-0.0004 cross-seed SE.
+
+Prior BB power fraction: 0.049 +/- 0.021 (analytic 0.045).
+Pipeline verified via the 0.091 gate (lambda=0 prior-JVP cross-seed mean).
+
+================================================================
+9. BB HALLUCINATION BY M, f64, seed0   [CANONICAL]
+================================================================
+Metric: iso = per-sample-mean response_error (isotropic);
+        |Jfno|_BB RMS over |k|,|q|>=16 (97x97 block).
+        |J_true| BB RMS floor: ~1.4e-4.
+
+M     iso       prior-JVP   |Jfno|_BB RMS
+2     1.0320    0.5540      4.25e-3
+4     0.5569    0.2835      2.15e-3
+8     0.2715    0.1160      1.12e-3
+12    0.2455    0.0861      1.03e-3   <- minimum = data spectral support
+14    0.3871    0.0862      1.95e-3
+16    0.5787    0.0909      3.09e-3
+20    0.8611    0.0945      4.65e-3
+24    0.9585    0.0878      5.19e-3
+
+Isotropic column verified = response Frobenius (matches tabulated values
+to ~2%); no forward-error mixup; gap column valid.
+
+Right branch M12->M24: iso x3.9, BB RMS x5, prior-JVP flat.
+iso/BB_RMS ratio ~185 for M>=16 -> isotropic rise dominated by BB hallucination.
+M=24 BB amplitude = 37x physical floor.
+
+Overstatement ratio iso/prior-JVP:
+  M2  : 1.9x     M12 : 2.9x     M16 : 6.4x     M24 : 10.9x
+Overstatement grows monotonically with capacity, not flat.
+
+Left branch (M2->M12): BB RMS monotone decreasing — confirmed.
+Global monotone: FALSE (underfitting left branch rises again for M>12).
+U-shape minimum at M=12 on both iso and BB RMS axes.
+
+seed0 only; BB mechanism is structural — multi-seed M14/20/24 deferred.
+
+================================================================
+10. RESPONSE UNDER DISTRIBUTION SHIFT, f64, seed0   [CANONICAL]
+================================================================
+Setup: M16/M12, lambda in {0,10}. Potential length-scale ls swept 0.05->0.30
+(training ls=0.20). Three metrics:
+  iso    = per-sample-mean isotropic response error vs Jtrue_kq_ls
+  pjLS   = prior-JVP with v drawn from ls-matched prior (shift-aware probe)
+  pj20   = prior-JVP with v drawn from training prior (ls=0.20, fixed probe)
+Gate: ls=0.20 = in-distribution, exact recovery expected.
+
+config        ls=0.05   ls=0.20   ls=0.30
+M16 lam0 iso  0.592     0.579     0.577
+M16 lam0 pjLS 0.341     0.091     0.060
+M16 lam0 pj20 0.126     0.091     0.087
+M12 lam0 pjLS 0.191     0.086     0.064
+M16 lam10 pjLS 0.056    0.037     0.033
+
+Three findings:
+
+(i)  Isotropic is flat under shift (0.592->0.577) while physical (pjLS)
+     degrades 3.75x (0.060->0.341, reading smooth->rough). Metrics disagree
+     on the SIGN of shift-sensitivity.
+
+(ii) Capacity liability is conditional: pj20 (training-prior probe) stays
+     flat across ls (0.087->0.126), while pjLS rises 3.75x — the liability
+     requires probing unsampled high-q directions. Not unconditional.
+
+(iii) DINO gain transfers: M16 lam10 pjLS stays below baseline lam0
+      (0.056 vs 0.091 at ls=0.20) across all tested ls values.
+
+Scope: seed0 only.
+
+================================================================
+11. OOD — RENORM ARM, f64, seeds {0,1,2} x lambda {0,0.1,10}   [CANONICAL]
+================================================================
+ls sweep 0.30 -> 0.05 (training ls=0.20).
+
+Forward-only forward rel-L2 : 0.016 -> 0.066  (rises 4x), stays <= 7%
 Forward-only response error : 0.577 -> 0.592  (+2.7%), sits ~58-60% throughout
-  -> forward accuracy is an ACTIVELY MISLEADING OOD monitor
+  -> forward accuracy is an actively misleading OOD monitor
 Response ordering lambda=10 < lambda=0.1 < lambda=0 at EVERY ls, no inversions.
- 
-================================================================
-8. HISTORICAL / SUPERSEDED  (do not cite as current)
-================================================================
-0.386   single-sample seed0 f32 response
-0.511   f32 M16 200-sample response ; 48.9% recovered (f32)
-k0 M-shape (0.489 / 0.592 / 0.540 / 0.505 / 0.428) — f32, parked, mechanism not chased
-truncate-at-inference table (1.037 -> 0.511) — f32
 
 ================================================================
-9. RESPONSE vs N (data-efficiency), f64, M16, 3-seed, warmup=50   [CANONICAL]
+12. RESPONSE VS N (DATA EFFICIENCY), f64, M16, 3-seed, warmup=50   [CANONICAL]
 ================================================================
 N       lam=0 (forward-only)   lam=0.1 (DINO)    gap
 250     1.140 +/- 0.023        0.336 +/- 0.013   3.4x
@@ -149,232 +300,164 @@ N       lam=0 (forward-only)   lam=0.1 (DINO)    gap
 1000    0.824 +/- 0.012        0.148 +/- 0.003   5.6x
 2000    0.587 +/- 0.009        0.1034 +/- 0.0017 5.7x
 
-DINO at N=250 (0.336) BEATS forward-only at N=2000 (0.587). Gap WIDENS with N.
-Both curves still falling at N=2000 -> report measured gap, NOT convergence.
+DINO at N=250 (0.336) beats forward-only at N=2000 (0.587). Gap widens with N.
+Both curves still falling at N=2000 — report measured gap, not convergence.
 lam=0 N<=500 sits above the 1.0 random-init floor (over-energetic misaligned Jacobian).
 
-Data-efficiency reading (measured, THIS sweep): at N=2000, forward-only 0.587 vs
-DINO lam=0.1 0.103 -> 5.7x lower response error at MATCHED data. 5.7x is the citable
-headline (both arms were swept across N here).
-[The larger ~10x (0.587 vs lam=10's 0.0571) is NOT from this sweep -- lam=10 ran
-only at N=2000 in §3, a different leg. Cross-ref it as such; do NOT present 5.7x
-and 10x together as if both came from the vsN sweep.]
-Forward-only decrements are GROWING per doubling (-0.14, -0.18, -0.24), not shrinking,
-so there is NO basis to extrapolate a crossing N. The old "~10^4-10^5 samples to reach
-DINO's level" estimate is CUT: extrapolating a growing-decrement curve is unsupported.
-Reframed claim (safe): forward data CAN buy response fidelity, but at a data cost so
-large that derivative supervision is dramatically cheaper -- quantified as the measured
-5.7x at N=2000, no asymptote claimed.
+Headline (this sweep): at N=2000, forward-only 0.587 vs DINO lam=0.1 0.103
+-> 5.7x lower response error at matched data. Both arms swept across N here.
+The larger ~10x figure (0.587 vs lam=10's 0.0571) is from §3, a separate leg
+where lam=10 ran only at N=2000 — cross-reference as such, do not present
+5.7x and 10x as if both came from this sweep.
 
-Provenance cross-refs (N2000 cells, since the curve is held 3-seed apples-to-apples):
-lam=0   0.587 here is 3-SEED (matches lam=0.1 vsN coverage); 4-SEED canonical = 0.573 (§2).
-lam=0.1 0.1034 here is 3-SEED; 4-SEED cell = 0.1040 +/- 0.0019 (§4, seed3 backfilled).
+Forward-only decrements per doubling: -0.14, -0.18, -0.24 (growing, not shrinking).
+No basis to extrapolate a crossing N. Safe claim: forward data can buy response
+fidelity, but at a cost large enough that derivative supervision is dramatically
+cheaper — quantified as the measured 5.7x at N=2000, no asymptote claimed.
+
+Provenance cross-refs (N=2000 cells; curve held 3-seed apples-to-apples):
+  lam=0   0.587 = 3-seed; 4-seed canonical = 0.573 (§2)
+  lam=0.1 0.1034 = 3-seed; 4-seed cell = 0.1040 +/- 0.0019 (§4)
 
 ================================================================
-10. RESPONSE — JACOBIAN ALIGNMENT DECOMPOSITION (r, cos), f64   [CANONICAL]
+13. JACOBIAN ALIGNMENT DECOMPOSITION, f64   [CANONICAL]
 ================================================================
-Decomposition: raw^2 = r^2 + 1 - 2*r*cos  (exact identity, r=scale, cos=direction)
-Threshold: raw > 1 (worse than random-init) iff r > 2*cos  (derived + confirmed)
+Decomposition: raw^2 = r^2 + 1 - 2*r*cos  (exact identity; r=scale, cos=direction)
+Threshold: raw > 1 (worse than random-init) iff r > 2*cos
 
---- lambda=0, M16 vs M12, N2000, 4-SEED (all rows 4-seed; seed3 backfilled, lam0.1) ---
-config          r                  cos                resid (rescaled)
-M16 lambda=0    1.149 +/- 0.005    0.859 +/- 0.003     0.504 (seed0)
-M12 lambda=0    1.011 +/- 0.008    0.965 +/- 0.007     0.242 (seed0)
-M16 lambda=0.1  0.9943+/- 0.0008   0.9940+/- 0.0002    0.103 (seed0)
-M16 lambda=10   0.9977+/- 0.0004   0.9982+/- 0.0001    0.057 (seed0)
+--- lambda=0, M16 vs M12, N=2000, 4-seed ---
+config          r                   cos                resid (rescaled)
+M16 lambda=0    1.149 +/- 0.005     0.859 +/- 0.003    0.504 (seed0)
+M12 lambda=0    1.011 +/- 0.008     0.965 +/- 0.007    0.242 (seed0)
+M16 lambda=0.1  0.9943 +/- 0.0008   0.9940 +/- 0.0002  0.103 (seed0)
+M16 lambda=10   0.9977 +/- 0.0004   0.9982 +/- 0.0001  0.057 (seed0)
+
 No-overlap gaps (M16 vs M12, lambda=0): r-gap 0.124-0.138, cos-gap 0.095-0.10
-  -> capacity liability lives on BOTH axes; M12 is nearly scale-clean (r~1.01).
+-> capacity liability lives on BOTH axes; M12 is nearly scale-clean (r~1.01).
 
---- lambda=0, M16, ACROSS N, 3-SEED (seeds 0-2 only, matches Task A vsN) ---
-N       r                  cos               raw (matches Sec.9-vsN Task A)
-250     1.4203 +/- 0.018   0.6076 +/- 0.007  1.140
-500     1.3644 +/- 0.015   0.6838 +/- 0.008  1.000
-1000    1.2719 +/- 0.007   0.7627 +/- 0.005  0.824
-2000    1.1486 +/- 0.005   0.8588 +/- 0.003  0.587
-Gap-to-perfect closes ~64-65% (both axes) from N250->N2000, IN LOCKSTEP
+--- lambda=0, M16, across N, 3-seed (seeds 0-2) ---
+N       r                   cos                raw
+250     1.4203 +/- 0.018    0.6076 +/- 0.007   1.140
+500     1.3644 +/- 0.015    0.6838 +/- 0.008   1.000
+1000    1.2719 +/- 0.007    0.7627 +/- 0.005   0.824
+2000    1.1486 +/- 0.005    0.8588 +/- 0.003   0.587
+
+Gap-to-perfect closes ~64-65% on both axes from N=250->N=2000, in lockstep
 (r-1 slightly > 1-cos throughout -> scale marginally more stubborn).
-r>2cos threshold crosses raw=1 at N~500 (r=1.364, 2cos=1.368) -- matches
-measured raw=1.000 at N500. This is a SELF-CONSISTENCY / code-correctness gate:
-raw^2 = r^2+1-2rcos is an identity, so r>2cos <=> raw>1 holds BY CONSTRUCTION.
-It confirms the pipeline computes r, cos, raw mutually consistently -- it is NOT
-independent validation of the mechanism (a reviewer would call that a tautology).
+r>2cos threshold crosses raw=1 at N~500 (r=1.364, 2cos=1.368), matching
+measured raw=1.000 at N=500. This confirms mutual consistency of the pipeline
+(raw^2 = r^2+1-2rcos is an identity) — not independent mechanistic validation.
 
---- lambda=0.1 (DINO), M16, ACROSS N, 3-SEED ---
-N       r                  cos
-250     0.9510 +/- 0.0016  0.9382 +/- 0.0042
-500     0.9709 +/- 0.0013  0.9730 +/- 0.0012
-1000    0.9864 +/- 0.0012  0.9877 +/- 0.0006
-2000    0.9946 +/- 0.0008  0.9941 +/- 0.0002
-DINO N250 beats forward-only N2000 on BOTH axes (0.951/0.938 vs 1.149/0.859)
-at 1/8 the data. DINO regime is UNDER-energetic (r<1, opposite sign from
-forward-only) with axes nearly BALANCED (1-r ~ 1-cos at every N) --
+--- lambda=0.1 (DINO), M16, across N, 3-seed ---
+N       r                   cos
+250     0.9510 +/- 0.0016   0.9382 +/- 0.0042
+500     0.9709 +/- 0.0013   0.9730 +/- 0.0012
+1000    0.9864 +/- 0.0012   0.9877 +/- 0.0006
+2000    0.9943 +/- 0.0008   0.9941 +/- 0.0002
+
+DINO N=250 beats forward-only N=2000 on both axes (0.951/0.938 vs 1.149/0.859)
+at 1/8 the data. DINO regime is under-energetic (r<1, opposite sign from
+forward-only) with axes nearly balanced (1-r ~ 1-cos at every N) —
 qualitatively different failure geometry from forward-only's over-energetic,
 scale-dominant profile.
 
-  [Real-alpha / real-cos is a DELIBERATE design choice, not an oversight:
-   response_error carries no U(1) phase freedom (both Jacobians share the
-   solver's fixed phase convention per its own docstring) -- a complex alpha
-   would hide genuine phase error as false "alignment." Validated by the
-   i*A synthetic gate: complex-alpha would score a pure 90-deg phase error
-   as cos~1 (aligned); real-alpha correctly scores it cos~0 (orthogonal).]
+Real-valued r and cos is a deliberate design choice: response_error carries no
+U(1) phase freedom (both Jacobians share the solver's fixed phase convention),
+so a complex alpha would hide genuine phase error as false alignment. Validated
+by a synthetic i*A gate: complex-alpha scores a pure 90-deg phase error as
+cos~1 (aligned); real-alpha correctly scores it cos~0 (orthogonal).
 
-  [Seed provenance: the two vsN TRAJECTORY tables are held at 3-seed (0-2) on
-  purpose -- apples-to-apples slope across N. The N2000/M16 CONFIG cells (first
-  table) are 4-seed: align_seed{0..3}_*.npz now includes seed3 for lam0, lam0.1
-  (backfilled), lam10. So N2000/lam0.1 reads 3-seed (0.9946/0.9941) in the
-  trajectory table and 4-seed (0.9943/0.9940) in the config table -- both correct,
-  tag which is which.]
+Seed provenance: vsN trajectory tables are 3-seed (seeds 0-2) for
+apples-to-apples slope across N. The N=2000/M16 config table (first table
+above) is 4-seed. N=2000/lam=0.1 therefore reads differently in each table
+(3-seed: 0.9946/0.9941; 4-seed: 0.9943/0.9940) — both correct, tag which
+is which.
 
 ================================================================
-11. TIMING / AMORTIZATION, f64, nx=128 nt=1000, seed0, CPU (median of 50)
+14. LINEARIZED VALIDITY RADIUS, f64, seed0, 20 samples x 4 dirs   [CANONICAL]
 ================================================================
-Per single-sample query (one (psi0, V)):
-  solver forward (psi_T)      2.25 ms
-  FNO forward    (psi_T)      0.26 ms      -> forward surrogate  8.8x
-  J_true (128 JVPs / scan)  121.5 ms
-  J_fno  (128 JVPs / net)    15.7 ms       -> response surrogate 7.7x (saving 105.7 ms/query)
-Both Jacobians cost ~55-60x their own forward (jacfwd over 128-dim V); the
-response-operator speedup TRACKS the forward speedup -- not a separate effect.
-
-Break-even  n* = T_train / saving   (saving = 0.106 s/query):
-  DEPLOYABLE model (lambda=0.0 DINO, response-trustworthy): T_train ~780-960 s (13-16 min)
-    -> n* ~ 7.4k-9.1k queries   (vs 200 available -> ~37-45x the testbed)
-  [forward-only lambda=0: T_train ~180-300 s (3-5 min) -> n* ~1.7k-2.8k, BUT that model
-   is response-wrong (sec 2); its cheaper training is NOT citable for a response claim.]
-  Robust: across every plausible training time n* is thousands >> 200.
-
-HONEST VERDICT: no speed win at this scale. One training run (minutes) already
-costs more than exact J_true for the ENTIRE testbed (200 x 121.5 ms = 24.3 s),
-and n* is thousands of queries vs 200 available -> the 7.7x/query never amortizes
-here. Testbed = CONTROLLED INSTRUMENT, not a production speed claim. The per-query
-win is real and transfers to regimes where one J_true is seconds-minutes (3D, fine
-grids, stiff dynamics) AND queries >> n* (optimization, UQ, inverse design) --
-CONTINGENT on DINO having fixed response accuracy first (a response-wrong surrogate
-is worthless regardless of speed).
-CPU timing (no GPU); RATIOS are portable, absolute ms are machine-specific.
-Sharpening: DINO training itself CONSUMES J_true-JVP evaluations (the ||J_fno·v -
-J_true·v|| targets), so the exact operator is a training-time PREREQUISITE, not
-something the surrogate obviates. Forward-only needs no J_true but is response-wrong
--> you cannot escape the exact operator AND get response fidelity for free.
-
-================================================================
-12. LINEARIZED VALIDITY RADIUS, f64, seed0, 20 samples x 4 dirs   [CANONICAL]
-================================================================
-Metric: err_J(eps) = ||dpsi_true - eps*(J.dV)|| / ||dpsi_true||,
-  dpsi_true = solver(V+eps*dV) - solver(V); dV unit-norm Gaussian (fd_check conv);
-  J.dV via jax.jvp. All J vs the SAME solver truth (pure Jacobian test). ||V||~19.2.
+Metric: err_J(eps) = ||dpsi_true - eps*(J.dV)|| / ||dpsi_true||
+  dpsi_true = solver(V+eps*dV) - solver(V); dV unit-norm Gaussian;
+  J.dV via jax.jvp. All J evaluated against the same solver truth. ||V||~19.2.
 
 eps* (largest eps with mean err < tol):
   operator        0.05     0.10     0.15     0.20
-  J_true          >1       >1       >1       >1      <- true dynamics near-linear to eps>1
-  J_fno lam0      <1e-4    <1e-4    <1e-4    <1e-4   <- NO valid regime at ANY eps
-  J_fno lam0.1    <1e-4    <1e-4    >1       >1      <- valid only if tol > ~0.11 plateau
+  J_true          >1       >1       >1       >1       <- true dynamics near-linear to eps>1
+  J_fno lam0      <1e-4    <1e-4    <1e-4    <1e-4    <- no valid regime at any eps
+  J_fno lam0.1    <1e-4    <1e-4    >1       >1       <- valid only if tol > ~0.11 plateau
 
-WHY FNO CURVES ARE FLAT: in the true-linear regime dpsi_true ~ eps*(J_true.dV), so eps
-  CANCELS in the ratio -> err_J -> ||(J_true-J).dV||/||J_true.dV||, eps-INDEPENDENT.
-  J_true: that term = 0 -> residual is O(eps) nonlinearity -> slope-1 diagonal.
-  J_fno : nonzero constant (~0.63 lam0, ~0.11 lam0.1) -> FLAT plateau.
-INTERPRETATION: FNO response error is SCALE-INVARIANT in eps -- representational, not a
-  linearization artifact (which would vanish as eps->0, as J_true's does). No perturbation
-  is small enough to make J_fno valid. J_true eps*>1 kills "linearization is hard here".
-X-check: lam0 plateau ~0.63 ~ Frobenius floor 0.573 (directional avg, O(1) weighting). OK.
-Artifacts: results/fig_validity_radius.png ; results/eps_sweep_arrays.npz
+Why FNO curves are flat: in the true-linear regime dpsi_true ~ eps*(J_true.dV),
+so eps cancels in the ratio -> err_J -> ||(J_true-J).dV||/||J_true.dV||,
+which is eps-independent.
+  J_true : that term = 0 -> residual is O(eps) nonlinearity -> slope-1 diagonal.
+  J_fno  : nonzero constant (~0.63 lam0, ~0.11 lam0.1) -> flat plateau.
 
+FNO response error is scale-invariant in eps — representational, not a
+linearization artifact (which would vanish as eps->0). No perturbation is
+small enough to make J_fno lam0 valid. J_true eps*>1 rules out "linearization
+is hard here" as an explanation.
 
-## Warmup ablation (M=16, lambda in {0.1, 1, 10}, 3 seeds each) — NULL, COMPLETE
-Response err, warmup=50 vs warmup=0 (3-seed mean):
-  lambda=0.1: 0.1034 vs 0.1016  (delta 0.0018)
-  lambda=1.0: 0.0725 vs 0.0723  (delta 0.0002)
-  lambda=10 : 0.0567 vs 0.0566  (delta 0.0001)  <- tightest null, and the regime
-              where warmup was a priori MOST likely to matter (high lambda)
-All deltas < seed spread (~0.002-0.004) and < SEM (~0.002). No divergence w/o
-warmup at any lambda. Claim is now GENERAL across the tested sweep.
+Cross-check: lam0 plateau ~0.63 ~ Frobenius floor 0.573 (directional average,
+O(1) weighting). Consistent.
+Artifacts: results/fig_validity_radius.png; results/eps_sweep_arrays.npz
 
-MANUSCRIPT: "Warmup (50 epochs) was used as a stability precaution and ablated
+================================================================
+15. WARMUP ABLATION, f64, M16, lambda in {0.1,1,10}, 3-seed   [CANONICAL]
+================================================================
+Response error, warmup=50 vs warmup=0 (3-seed mean):
+  lambda=0.1 : 0.1034 vs 0.1016  (delta 0.0018)
+  lambda=1.0 : 0.0725 vs 0.0723  (delta 0.0002)
+  lambda=10  : 0.0567 vs 0.0566  (delta 0.0001)
+
+All deltas within seed spread (~0.002-0.004) and SEM (~0.002). No divergence
+without warmup at any lambda. Result is general across the tested sweep.
+
+Warmup (50 epochs) was used as a stability precaution and ablated
 across lambda in {0.1,1,10}, 3 seeds each; it has no measurable effect on the
 converged response error (max delta 0.0018, within seed noise). Reported runs
-use warmup=50; results are unchanged without it."
+use warmup=50; results are unchanged without it.
 
-Ablation checkpoints: checkpoints/ablation/ (gitignored, throwaway).
+================================================================
+16. TIMING / AMORTIZATION, f64, nx=128, nt=1000, seed0, CPU (median of 50)
+================================================================
+Per single-sample query (one (psi0, V)):
+  solver forward (psi_T)     2.25 ms
+  FNO forward    (psi_T)     0.26 ms      -> forward surrogate  8.6x
+  J_true (128 JVPs / scan) 121.5 ms
+  J_fno  (128 JVPs / net)   15.7 ms      -> response surrogate 7.7x (saving 105.7 ms/query)
 
-------------------------------------------------------------------------------------
-E2  [HELD (core) / "zero non-monotonicity" clause REWORDED / falsifier NOT triggered]
-  predicted: monotone non-increasing; decrease for small M; plateau ~0.09 by M~8-12;
-             flat M14-24; zero non-monotonicity. Falsifier: rising for M>12.
-  measured (3-seed mean; cross-seed SE ~0.001-0.003; direction-MC +/-0.0025 common):
-             M2 0.545  M4 0.283  M8 0.113  M12 0.087  M14 0.087
-             M16 0.092  M20 0.093  M24 0.086
-  verdict  : Decrease-to-plateau HOLDS. 0.545->0.087 for M2->12; flat 0.089+/-0.003 for
-             M12->24 -- a 6x range in M over which the ISOTROPIC metric rises 3.5x.
-             Plateau onset at M=12 = the data's spectral support (98% of ||J_true||^2 at
-             |q|<12): a mechanistic prediction, confirmed. Falsifier NOT triggered:
-             M24 (0.086) < M12 (0.087), no net rise for M>12.
-             "Zero non-monotonicity" REWORDED: a +0.005 bump at M16-20 (~2 SE, equal to
-             the direction-MC bar) returns to baseline at M24. Within uncertainty, not a
-             trend. Plausible cause: the ~3% of prior-dV power at |k|>=16 (gate A) lets a
-             sliver of unprobed-sector hallucination leak in. Not load-bearing.
+Both Jacobians cost ~55-60x their own forward (jacfwd over 128-dim V);
+response surrogate speedup tracks the forward speedup.
 
-M	isotropic (retrain)	prior-JVP	gap
-2	1.01	0.545	—
-4	0.55	0.283	—
-8	0.26	0.113	—
-12	0.26	0.087	0.17
-14	0.40	0.087	0.31
-16	0.59	0.092	0.50
-20	0.83	0.093	0.74
-24	0.92	0.086	0.83
+Break-even n* = T_train / saving  (saving = 0.106 s/query):
+  DINO lambda=0.1 (response-trustworthy): T_train ~780-960 s -> n* ~7.4k-9.1k queries
+  forward-only lambda=0: T_train ~180-300 s -> n* ~1.7k-2.8k, but this model
+    is response-wrong (§2) — its cheaper training is not citable for a response claim.
 
-Along perturbations drawn from the potential prior, response error decreases with spectral capacity until the data's spectral support is resolved (M≈12, where 98% of ‖J_true‖² lies), then plateaus at 0.089±0.003 through M=24. Over the same range the isotropic Frobenius error rises 3.5× — an increase that lives entirely in a high-wavenumber sector carrying 0.07% of the true operator's power. The apparent capacity liability is spectrally displaced, not physical.
+No speed win at this scale: one training run already costs more than exact
+J_true for the entire 200-sample testbed (200 x 121.5 ms = 24.3 s), and n*
+is thousands of queries vs 200 available. The testbed is a controlled
+instrument, not a production speed claim. The per-query win transfers to
+regimes where one J_true costs seconds-to-minutes (3D, fine grids, stiff
+dynamics) AND query count >> n* (optimization, UQ, inverse design) —
+contingent on response accuracy being established first.
 
-E1  [DINO under prior-JVP — HELD, DINO arc survives as exhibit B; E5 parked]
-  M16, 4-seed. prior-JVP cross-seed mean +/- SE (probe directions FIXED):
-    lam=0    0.0916 +/- 0.0004     lam=0.1  0.0611 +/- 0.0013     lam=10   0.0374 +/- 0.0008
-  Real data-space improvement 0.092->0.037 (~2.5x), decisive (~7sigma paired). ~90% of the
-  isotropic gain (0.573->0.057) was BB cleanup (physically inert); ~10% real.
-  LABEL DISCIPLINE: +/-0.0004 = cross-seed reproducibility with the 320 probe directions held
-  FIXED (CRN); it is NOT direction-sampling uncertainty. Carry within-seed pop-std +/-0.044 and
-  the common direction-MC offset ~+/-0.0025 separately. Never quote +/-0.0004 unlabelled.
-  Gate A correction: prior_dV BB power frac is 0.049+/-0.021 (analytic 0.045), NOT 0.029;
-  0.029 retired as imprecise. Code verified by the 0.091 gate, not Gate A.
+Note: DINO training consumes J_true-JVP evaluations as supervision targets,
+so the exact operator is a training-time prerequisite. Forward-only avoids
+this cost but is response-wrong — derivative supervision and response fidelity
+cannot both be obtained for free.
 
-E3  [BB hallucination + authoritative isotropic column — pre-reg (M>=12) HELD]
-  seed0. iso = per-sample-mean response_error; |Jfno|_BB RMS over |k|,|q|>=16 (97x97 block).
-    M    iso      priorJVP  |Jfno|_BB RMS
-    2    1.0320   0.5540    4.25e-3
-    4    0.5569   0.2835    2.15e-3
-    8    0.2715   0.1160    1.12e-3
-    12   0.2455   0.0861    1.03e-3   <- U-shape minimum = data spectral support
-    14   0.3871   0.0862    1.95e-3
-    16   0.5787   0.0909    3.09e-3
-    20   0.8611   0.0945    4.65e-3
-    24   0.9585   0.0878    5.19e-3
-  |J_true| BB RMS floor ~1.4e-4.  Retrain isotropic column VERIFIED = response-Frobenius
-  (matches tabulated 1.01..0.92 to ~2%); no forward-error mixup; gap column valid.
-  Right branch M12->24: iso x3.9, BB RMS x5, priorJVP flat. iso/BB_RMS -> ~185 for M>=16:
-  the isotropic rise is dominated by BB hallucination. M24 BB amp = 37x physical floor.
-  Pre-reg: BB monotone for M>=12 HELD; global monotone FALSE (underfitting left branch);
-  falsifier NOT triggered. seed0 only (mechanism structural; multi-seed M14/20/24 deferred,
-  flag as seed0 in paper).
+CPU timing only; ratios are portable, absolute ms are machine-specific.
 
-  §6  [block table, seed0 — retraction replaced, HELD]
-  J_true power: SS 98.21%, in-band |k|<12 = 99.76%, B-row marginal 0.08% (BB block 0.07%).
-  Error |k|>=16 marginal: M12 62.1% / M16 96.7% / M24 98.5%  (BB block 60.1/96.3/98.5%).
-  M12 error MIXED (60% BB, 31% in-band) -> M12 iso ~1/3 real; M16+ ~97% inert BB.
-  Overstatement iso/priorJVP monotone in M: 1.9(M2) 2.9(M12) 6.4(M16) 10.9(M24).
-  HEADLINE: isotropic overstates 2-11x, GROWING with capacity (not flat ~7x).
+================================================================
+17. HISTORICAL / SUPERSEDED
+================================================================
+The following numbers are f32-era and superseded by the f64 results above.
+Retained for precision-sensitivity context only: a 0.002 shift in forward
+rel-L2 (f32->f64) moved response error by 0.068.
 
-  E4  [response under distribution shift (roughness ls), seed0 — HELD, with scope caveat]
-  M16/M12, lam0/lam10. iso = per-sample-mean vs Jtrue_kq_ls; prior-JVP delta~ls-prior,
-  with delta~training-prior(0.20) as sensitivity. Gate ls=0.20 = in-dist exact (V-V128=0).
-    config      ls0.05  ls0.20  ls0.30   | metric
-    M16 l0 iso  0.592   0.579   0.577    | isotropic ~FLAT under shift (BB-saturated)
-    M16 l0 pjLS 0.341   0.091   0.060    | physical response 3.75x under shift
-    M16 l0 pj20 0.126   0.091   0.087    | training-prior probe ~flat -> liability is
-                                           conditional on probing the empty sector
-    M12 l0 pjLS 0.191   0.086   0.064    | 2.21x (< M16's 3.75x): capacity x shift real
-    M16 l10 pjLS 0.056  0.037   0.033    | DINO SURVIVES shift, stays < baseline 0.091
-  CLAIMS: (i) isotropic is FLAT under shift while physical degrades 3.75x -- metrics
-  disagree on the SIGN of shift-sensitivity. (ii) capacity liability is CONDITIONAL
-  (needs probing unsampled high-q directions), NOT physical -- do NOT overclaim.
-  (iii) DINO's gain transfers to 4x-rougher potentials (answers reviewer concern 7).
-  seed0 only; flag as seed0 in paper.
+0.386   single-sample seed0 f32 response
+0.511   f32 M16 200-sample response; 48.9% recovered
+k0 M-shape (0.489/0.592/0.540/0.505/0.428) — f32, mechanism not pursued
+truncate-at-inference table (1.037->0.511) — f32
+
